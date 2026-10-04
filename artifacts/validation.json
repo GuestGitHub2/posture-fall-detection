@@ -1,0 +1,498 @@
+{
+  "status": "verified_local_engineering_baseline",
+  "verification_date": "2026-10-05",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "memory_gb": 24,
+    "cpu_cores": 18
+  },
+  "files_created": [
+    "configs/cpu.yaml",
+    "configs/default.yaml",
+    "configs/mac.yaml",
+    "configs/rtmpose.yaml",
+    "configs/windows.yaml",
+    "models/.DS_Store",
+    "models/README.md",
+    "models/licenses/MMPose-Apache-2.0.txt",
+    "models/licenses/RTMLib-Apache-2.0.txt",
+    "models/licenses/YOLOX-Apache-2.0.txt",
+    "models/manifest.json",
+    "src/.DS_Store",
+    "src/__init__.py",
+    "src/app.py",
+    "src/capture/__init__.py",
+    "src/capture/camera.py",
+    "src/config.py",
+    "src/events.py",
+    "src/fall/__init__.py",
+    "src/fall/detector.py",
+    "src/fall/heuristic.py",
+    "src/fall/stgcn.py",
+    "src/fall/temporal_buffer.py",
+    "src/pipeline.py",
+    "src/pose/__init__.py",
+    "src/pose/base.py",
+    "src/pose/normalization.py",
+    "src/pose/pose_types.py",
+    "src/pose/rtmo.py",
+    "src/pose/rtmpose.py",
+    "src/posture/__init__.py",
+    "src/posture/classifier.py",
+    "src/posture/geometry.py",
+    "src/posture/mlp.py",
+    "src/posture/rules.py",
+    "src/runtime/__init__.py",
+    "src/runtime/onnx_runtime.py",
+    "src/runtime/providers.py",
+    "src/state/__init__.py",
+    "src/state/person_state.py",
+    "src/state/state_machine.py",
+    "src/tracking/__init__.py",
+    "src/tracking/matching.py",
+    "src/tracking/tracker.py",
+    "src/utils/__init__.py",
+    "src/utils/fps.py",
+    "src/utils/profiling.py",
+    "src/visualization/__init__.py",
+    "src/visualization/renderer.py",
+    "tests/.DS_Store",
+    "tests/__init__.py",
+    "tests/helpers.py",
+    "tests/test_capture.py",
+    "tests/test_config.py",
+    "tests/test_events.py",
+    "tests/test_fall.py",
+    "tests/test_normalization.py",
+    "tests/test_pipeline.py",
+    "tests/test_pose_runtime.py",
+    "tests/test_posture.py",
+    "tests/test_posture_mlp.py",
+    "tests/test_state_machine.py",
+    "tests/test_stgcn.py",
+    "tests/test_temporal_buffer.py",
+    "tests/test_tracking.py",
+    "tests/test_training.py",
+    "tests/test_video_scheduling.py",
+    "tools/.DS_Store",
+    "tools/__init__.py",
+    "tools/benchmark.py",
+    "tools/check_runtime.py",
+    "tools/download_models.py",
+    "tools/export_models.py",
+    "training/.DS_Store",
+    "training/README.md",
+    "training/__init__.py",
+    "training/dataset.py",
+    "training/evaluate.py",
+    "training/extract_skeletons.py",
+    "training/models.py",
+    "training/train_common.py",
+    "training/train_fall.py",
+    "training/train_posture.py",
+    "README.md",
+    "pyproject.toml",
+    "requirements.txt",
+    ".gitignore"
+  ],
+  "checks": {
+    "pytest": {
+      "passed": 87,
+      "failed": 0
+    },
+    "ruff": "passed",
+    "ruff_format": "passed",
+    "pip_check": "passed",
+    "gui_camera": {
+      "frames": 150,
+      "resolution": [
+        1280,
+        720
+      ],
+      "capture_and_render_fps_observed": 30.1,
+      "pose_fps_observed": 14.1,
+      "pose_target_fps": 15,
+      "provider": "CoreMLExecutionProvider",
+      "scope": "live feed, skeleton, ID, low-confidence UNKNOWN posture overlay; no real fall"
+    },
+    "video_recording": {
+      "input_frames": 90,
+      "output_frames": 90,
+      "input_fps": 30,
+      "output_fps": 30
+    },
+    "temporal_fall": "synthetic descent/rotation/ground persistence emits one fall event; separate lying person remains normal; one missed detection and reordering preserve IDs",
+    "training": "one-epoch synthetic posture/fall train/export/eval; not real trained detector weights",
+    "pose_backend": "official RTMO-m + optional real RTMPose-m and YOLOX-tiny verified",
+    "coreml_empty_scenes": "person and blank alternation retains CoreML with batch-one static backbone and CPU dynamic outputs"
+  },
+  "benchmarks": {
+    "coreml": {
+      "mode": "image",
+      "provider": "CoreMLExecutionProvider",
+      "pose_model": {
+        "architecture": "RTMO-m Body7 COCO17 (ONNX SDK)",
+        "path": "/Users/abdullahshahidali/Documents/Fall_test/models/rtmo_m.onnx",
+        "size_bytes": 89269977,
+        "provider": "CoreMLExecutionProvider",
+        "session_providers": [
+          "CoreMLExecutionProvider",
+          "CPUExecutionProvider"
+        ],
+        "inputs": [
+          {
+            "name": "input",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "type": "tensor(float)"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "dets",
+            "shape": [
+              "batch",
+              "Reshapedets_dim_1",
+              "Reshapedets_dim_2"
+            ],
+            "type": "tensor(float)"
+          },
+          {
+            "name": "keypoints",
+            "shape": [
+              "batch",
+              "Concatkeypoints_dim_1",
+              "Concatkeypoints_dim_2",
+              "Concatkeypoints_dim_3"
+            ],
+            "type": "tensor(float)"
+          }
+        ]
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.14",
+      "opencv": "4.14.0",
+      "frames": 100,
+      "warmup_frames": 10,
+      "people": null,
+      "latency_ms": {
+        "pose_ms": {
+          "mean": 11.896088350040372,
+          "p50": 11.876812495756894,
+          "p95": 12.15757115278393,
+          "p99": 12.28442692256067
+        },
+        "posture_ms": {
+          "mean": 0.06287079100729898,
+          "p50": 0.06160400516819209,
+          "p95": 0.07412320701405406,
+          "p99": 0.08083859604084864
+        },
+        "fall_ms": {
+          "mean": 0.07426037889672443,
+          "p50": 0.07356300193350762,
+          "p95": 0.08050205215113238,
+          "p99": 0.0853505128179677
+        },
+        "tracking_ms": {
+          "mean": 0.08330707089044154,
+          "p50": 0.07895848830230534,
+          "p95": 0.1206437373184599,
+          "p99": 0.14173426548950374
+        },
+        "total_ms": {
+          "mean": 12.122112118231598,
+          "p50": 12.095624988432974,
+          "p95": 12.445129471598193,
+          "p99": 12.542865330469796
+        },
+        "capture_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        }
+      },
+      "wall_seconds": 1.2123898749996442,
+      "average_fps": 82.48171818494389,
+      "pipeline_fps": 82.49387485007706,
+      "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+    },
+    "cpu": {
+      "mode": "image",
+      "provider": "CPUExecutionProvider",
+      "pose_model": {
+        "architecture": "RTMO-m Body7 COCO17 (ONNX SDK)",
+        "path": "/Users/abdullahshahidali/Documents/Fall_test/models/rtmo_m.onnx",
+        "size_bytes": 89269977,
+        "provider": "CPUExecutionProvider",
+        "session_providers": [
+          "CPUExecutionProvider"
+        ],
+        "inputs": [
+          {
+            "name": "input",
+            "shape": [
+              "batch",
+              3,
+              640,
+              640
+            ],
+            "type": "tensor(float)"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "dets",
+            "shape": [
+              "batch",
+              "Reshapedets_dim_1",
+              "Reshapedets_dim_2"
+            ],
+            "type": "tensor(float)"
+          },
+          {
+            "name": "keypoints",
+            "shape": [
+              "batch",
+              "Concatkeypoints_dim_1",
+              "Concatkeypoints_dim_2",
+              "Concatkeypoints_dim_3"
+            ],
+            "type": "tensor(float)"
+          }
+        ]
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.14",
+      "opencv": "4.14.0",
+      "frames": 60,
+      "warmup_frames": 10,
+      "people": null,
+      "latency_ms": {
+        "pose_ms": {
+          "mean": 75.17027351859724,
+          "p50": 73.55195801937953,
+          "p95": 82.8222270894912,
+          "p99": 101.41194627591167
+        },
+        "posture_ms": {
+          "mean": 0.07894928130554035,
+          "p50": 0.07527049456257373,
+          "p95": 0.10161426762351765,
+          "p99": 0.166835811396595
+        },
+        "fall_ms": {
+          "mean": 0.08780971984378994,
+          "p50": 0.08179149881470948,
+          "p95": 0.11362502118572593,
+          "p99": 0.18934428226202665
+        },
+        "tracking_ms": {
+          "mean": 0.13766741855458045,
+          "p50": 0.13433300773613155,
+          "p95": 0.18768715235637498,
+          "p99": 0.21119705517776302
+        },
+        "total_ms": {
+          "mean": 75.48557483484426,
+          "p50": 73.8563540217001,
+          "p95": 83.13935865153324,
+          "p99": 101.92832923552479
+        },
+        "capture_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        }
+      },
+      "wall_seconds": 4.52932241698727,
+      "average_fps": 13.24701455894802,
+      "pipeline_fps": 13.2475642159169,
+      "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+    },
+    "synthetic": {
+      "mode": "synthetic_skeletons",
+      "provider": "skeleton-only",
+      "pose_model": null,
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.14",
+      "opencv": "4.14.0",
+      "frames": 300,
+      "warmup_frames": 30,
+      "people": 2,
+      "latency_ms": {
+        "pose_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "posture_ms": {
+          "mean": 0.09799016076916207,
+          "p50": 0.0967710220720619,
+          "p95": 0.10400415485491976,
+          "p99": 0.1290249274461529
+        },
+        "fall_ms": {
+          "mean": 0.11943122003382693,
+          "p50": 0.11783350782934576,
+          "p95": 0.1291312204557471,
+          "p99": 0.1436076642130501
+        },
+        "tracking_ms": {
+          "mean": 0.12227888005630423,
+          "p50": 0.12037499982398003,
+          "p95": 0.13540480431402105,
+          "p99": 0.15050873218569905
+        },
+        "total_ms": {
+          "mean": 0.34379623354955885,
+          "p50": 0.33999999868683517,
+          "p95": 0.3704764530993998,
+          "p99": 0.4234623070806265
+        },
+        "capture_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        }
+      },
+      "wall_seconds": 0.11134466601652093,
+      "average_fps": 2694.3365203995227,
+      "pipeline_fps": 2908.699695966414,
+      "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+    },
+    "camera": {
+      "mode": "camera",
+      "provider": "CoreMLExecutionProvider",
+      "pose_model": {
+        "architecture": "RTMO-m Body7 COCO17 (ONNX SDK)",
+        "path": "/Users/abdullahshahidali/Documents/Fall_test/models/rtmo_m.onnx",
+        "size_bytes": 89269977,
+        "provider": "CoreMLExecutionProvider",
+        "session_providers": [
+          "CoreMLExecutionProvider",
+          "CPUExecutionProvider"
+        ],
+        "inputs": [
+          {
+            "name": "input",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "type": "tensor(float)"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "dets",
+            "shape": [
+              "batch",
+              "Reshapedets_dim_1",
+              "Reshapedets_dim_2"
+            ],
+            "type": "tensor(float)"
+          },
+          {
+            "name": "keypoints",
+            "shape": [
+              "batch",
+              "Concatkeypoints_dim_1",
+              "Concatkeypoints_dim_2",
+              "Concatkeypoints_dim_3"
+            ],
+            "type": "tensor(float)"
+          }
+        ]
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.14",
+      "opencv": "4.14.0",
+      "frames": 60,
+      "warmup_frames": 10,
+      "people": null,
+      "observed_people": {
+        "min": 0,
+        "max": 0,
+        "mean": 0.0
+      },
+      "input_dimensions": [
+        [
+          1280,
+          720
+        ]
+      ],
+      "source_fps": 30.0,
+      "requested_camera": {
+        "index": 0,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "stall_timeout_seconds": 8.0
+      },
+      "latency_ms": {
+        "pose_ms": {
+          "mean": 13.14200620011737,
+          "p50": 12.97983349650167,
+          "p95": 15.042172319954261,
+          "p99": 15.08230276987888
+        },
+        "posture_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "fall_ms": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "tracking_ms": {
+          "mean": 0.01045348229429995,
+          "p50": 0.010499497875571251,
+          "p95": 0.012758359662257135,
+          "p99": 0.013717662659473717
+        },
+        "total_ms": {
+          "mean": 13.157940967357717,
+          "p50": 12.997124998946674,
+          "p95": 15.054153867822606,
+          "p99": 15.100546735338867
+        },
+        "capture_ms": {
+          "mean": 20.301135516395636,
+          "p50": 20.13541701307986,
+          "p95": 26.10547644726466,
+          "p99": 27.117136018059682
+        }
+      },
+      "wall_seconds": 2.007916167000076,
+      "average_fps": 29.88172563481219,
+      "pipeline_fps": 75.99973297348002,
+      "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+    }
+  },
+  "remaining_validation": [
+    "real held-out falls and hard negatives",
+    "physical Windows GPU devices",
+    "crowded identity retention and full occlusion",
+    "trained/calibrated posture and fall weights",
+    "no real fall accuracy claimed"
+  ]
+}

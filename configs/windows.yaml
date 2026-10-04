@@ -1,0 +1,6 @@
+# Install one ORT distribution providing your hardware's execution provider.
+runtime:
+  provider: auto
+  intra_op_threads: 4
+pose:
+  inference_fps: 15

@@ -1,0 +1,65 @@
+{
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu_architecture": "arm64",
+  "cpu_count": 18,
+  "python": "3.12.14",
+  "python_executable": "/Users/abdullahshahidali/Documents/Fall_test/.venv/bin/python",
+  "opencv": "4.14.0",
+  "onnxruntime": "1.30.0",
+  "available_providers": [
+    "CoreMLExecutionProvider",
+    "AzureExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "camera": {
+    "works": true,
+    "index": 0,
+    "frame_size": [
+      1920,
+      1080
+    ]
+  },
+  "loaded_model": {
+    "path": "/Users/abdullahshahidali/Documents/Fall_test/models/rtmo_m.onnx",
+    "size_bytes": 89269977,
+    "provider": "CoreMLExecutionProvider",
+    "session_providers": [
+      "CoreMLExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "inputs": [
+      {
+        "name": "input",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "type": "tensor(float)"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "dets",
+        "shape": [
+          "batch",
+          "Reshapedets_dim_1",
+          "Reshapedets_dim_2"
+        ],
+        "type": "tensor(float)"
+      },
+      {
+        "name": "keypoints",
+        "shape": [
+          "batch",
+          "Concatkeypoints_dim_1",
+          "Concatkeypoints_dim_2",
+          "Concatkeypoints_dim_3"
+        ],
+        "type": "tensor(float)"
+      }
+    ]
+  },
+  "provider_note": "Preferred active provider; unsupported graph operators may execute on CPU."
+}

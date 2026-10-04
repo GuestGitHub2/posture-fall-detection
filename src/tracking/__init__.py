@@ -1,0 +1,1 @@
+"""Persistent person association."""

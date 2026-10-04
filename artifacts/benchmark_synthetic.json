@@ -1,0 +1,54 @@
+{
+  "mode": "synthetic_skeletons",
+  "provider": "skeleton-only",
+  "pose_model": null,
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "architecture": "arm64",
+  "python": "3.12.14",
+  "opencv": "4.14.0",
+  "frames": 300,
+  "warmup_frames": 30,
+  "people": 2,
+  "latency_ms": {
+    "pose_ms": {
+      "mean": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "posture_ms": {
+      "mean": 0.09799016076916207,
+      "p50": 0.0967710220720619,
+      "p95": 0.10400415485491976,
+      "p99": 0.1290249274461529
+    },
+    "fall_ms": {
+      "mean": 0.11943122003382693,
+      "p50": 0.11783350782934576,
+      "p95": 0.1291312204557471,
+      "p99": 0.1436076642130501
+    },
+    "tracking_ms": {
+      "mean": 0.12227888005630423,
+      "p50": 0.12037499982398003,
+      "p95": 0.13540480431402105,
+      "p99": 0.15050873218569905
+    },
+    "total_ms": {
+      "mean": 0.34379623354955885,
+      "p50": 0.33999999868683517,
+      "p95": 0.3704764530993998,
+      "p99": 0.4234623070806265
+    },
+    "capture_ms": {
+      "mean": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    }
+  },
+  "wall_seconds": 0.11134466601652093,
+  "average_fps": 2694.3365203995227,
+  "pipeline_fps": 2908.699695966414,
+  "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+}

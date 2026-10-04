@@ -1,0 +1,95 @@
+{
+  "mode": "image",
+  "provider": "CPUExecutionProvider",
+  "pose_model": {
+    "architecture": "RTMO-m Body7 COCO17 (ONNX SDK)",
+    "path": "/Users/abdullahshahidali/Documents/Fall_test/models/rtmo_m.onnx",
+    "size_bytes": 89269977,
+    "provider": "CPUExecutionProvider",
+    "session_providers": [
+      "CPUExecutionProvider"
+    ],
+    "inputs": [
+      {
+        "name": "input",
+        "shape": [
+          "batch",
+          3,
+          640,
+          640
+        ],
+        "type": "tensor(float)"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "dets",
+        "shape": [
+          "batch",
+          "Reshapedets_dim_1",
+          "Reshapedets_dim_2"
+        ],
+        "type": "tensor(float)"
+      },
+      {
+        "name": "keypoints",
+        "shape": [
+          "batch",
+          "Concatkeypoints_dim_1",
+          "Concatkeypoints_dim_2",
+          "Concatkeypoints_dim_3"
+        ],
+        "type": "tensor(float)"
+      }
+    ]
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "architecture": "arm64",
+  "python": "3.12.14",
+  "opencv": "4.14.0",
+  "frames": 60,
+  "warmup_frames": 10,
+  "people": null,
+  "latency_ms": {
+    "pose_ms": {
+      "mean": 75.17027351859724,
+      "p50": 73.55195801937953,
+      "p95": 82.8222270894912,
+      "p99": 101.41194627591167
+    },
+    "posture_ms": {
+      "mean": 0.07894928130554035,
+      "p50": 0.07527049456257373,
+      "p95": 0.10161426762351765,
+      "p99": 0.166835811396595
+    },
+    "fall_ms": {
+      "mean": 0.08780971984378994,
+      "p50": 0.08179149881470948,
+      "p95": 0.11362502118572593,
+      "p99": 0.18934428226202665
+    },
+    "tracking_ms": {
+      "mean": 0.13766741855458045,
+      "p50": 0.13433300773613155,
+      "p95": 0.18768715235637498,
+      "p99": 0.21119705517776302
+    },
+    "total_ms": {
+      "mean": 75.48557483484426,
+      "p50": 73.8563540217001,
+      "p95": 83.13935865153324,
+      "p99": 101.92832923552479
+    },
+    "capture_ms": {
+      "mean": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    }
+  },
+  "wall_seconds": 4.52932241698727,
+  "average_fps": 13.24701455894802,
+  "pipeline_fps": 13.2475642159169,
+  "notes": "Synchronous unthrottled benchmark; GUI/encoding excluded. Synthetic mode excludes pose inference and camera."
+}

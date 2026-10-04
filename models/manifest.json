@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "models": {
+    "rtmo_m": {
+      "url": "https://download.openmmlab.com/mmpose/v1/projects/rtmo/onnx_sdk/rtmo-m_16xb16-600e_body7-640x640-39e78cc4_20231211.zip",
+      "filename": "rtmo_m.onnx",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/open-mmlab/mmpose/blob/main/LICENSE",
+      "source": "https://github.com/open-mmlab/mmpose/tree/main/projects/rtmo",
+      "description": "Official RTMO-m Body7, COCO17, 640x640, one-stage multi-person ONNX SDK export",
+      "sha256": null
+    },
+    "rtmpose_m": {
+      "url": "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.zip",
+      "filename": "rtmpose_m.onnx",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/open-mmlab/mmpose/blob/main/LICENSE",
+      "source": "https://github.com/open-mmlab/mmpose/tree/main/projects/rtmpose",
+      "description": "Official RTMPose-m Body7, COCO17, 256x192, SimCC ONNX SDK export; requires person detector",
+      "sha256": null
+    },
+    "yolox_tiny": {
+      "url": "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/yolox_tiny_8xb8-300e_humanart-6f3252f9.zip",
+      "filename": "yolox_tiny.onnx",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/Megvii-BaseDetection/YOLOX/blob/main/LICENSE",
+      "source": "https://github.com/open-mmlab/mmpose/tree/main/projects/rtmpose",
+      "description": "Official YOLOX-tiny HumanArt+COCO person detector, 416x416; optional RTMPose adapter",
+      "sha256": null
+    }
+  }
+}

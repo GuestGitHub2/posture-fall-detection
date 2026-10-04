@@ -1,0 +1,113 @@
+# All decision thresholds are adjustable here. Platform profiles merge over these defaults.
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  fps: 30
+  stall_timeout_seconds: 8.0
+pose:
+  model: rtmo_m
+  model_path: models/rtmo_m.onnx
+  inference_fps: 15
+  confidence_threshold: 0.3
+  joint_confidence_threshold: 0.3
+  nms_threshold: 0.45
+  max_people: 30
+tracking:
+  max_missing_frames: 15
+  max_missing_seconds: 1.0
+  matching_threshold: 0.75
+  confidence_threshold: 0.3
+  iou_weight: 0.45
+  max_skeleton_distance: 0.8
+  velocity_smoothing: 0.6
+  prediction_seconds: 0.5
+posture:
+  confidence_threshold: 0.3
+  minimum_visible_joints: 6
+  minimum_confidence: 0.4
+  lying_torso_angle: 65.0
+  lying_aspect_ratio: 1.0
+  lying_hip_ankle_height: 0.18
+  standing_torso_angle: 28.0
+  standing_knee_angle: 155.0
+  bending_torso_angle: 35.0
+  bending_knee_angle: 140.0
+  sitting_knee_angle: 140.0
+  sitting_hip_knee_height: 0.2
+  enable_extra_postures: false
+  squatting_knee_angle: 95.0
+  squatting_hip_knee_height: 0.05
+  kneeling_hip_ankle_height: 0.22
+  confidence_ceiling: 0.97
+  smoothing_frames: 5
+  joint_confidence_threshold: 0.3
+  backend: rules
+  model_path: models/posture_mlp.onnx
+  classes:
+  - standing
+  - sitting
+  - bending
+  - lying
+  - squatting
+  - kneeling
+  - unknown
+fall:
+  history_seconds: 2.0
+  max_samples: 90
+  max_gap_seconds: 0.5
+  minimum_joint_confidence: 0.4
+  motion_window_seconds: 0.9
+  minimum_motion_seconds: 0.12
+  upright_torso_angle: 30.0
+  minimum_hip_drop: 0.24
+  minimum_shoulder_drop: 0.2
+  minimum_hip_velocity: 0.65
+  maximum_hip_velocity: 5.0
+  minimum_torso_rotation: 35.0
+  possible_torso_angle: 40.0
+  ground_hip_ankle_height: 0.24
+  lying_persistence_seconds: 0.35
+  candidate_timeout_seconds: 1.8
+  possible_threshold: 0.55
+  confirmed_threshold: 0.8
+  normal_probability: 0.03
+  possible_probability: 0.65
+  fall_probability: 0.92
+  confirmation_frames: 3
+  recovery_seconds: 3.0
+  event_cooldown_seconds: 10.0
+  detector: heuristic
+  model_path: models/fall_stgcn.onnx
+  sample_count: 48
+  classes:
+  - normal
+  - fall
+  output_kind: logits
+  min_history_seconds: 1.6
+  minimum_confident_joints_per_pair: 1
+state:
+  posture_confirmation_frames: 3
+  posture_confidence_threshold: 0.4
+  possible_confirmation_frames: 2
+  max_prediction_gap_seconds: 0.5
+  recovery_postures:
+  - standing
+  - sitting
+  - kneeling
+  missing_unknown_seconds: 0.5
+  posture_hold_seconds: 0.25
+runtime:
+  provider: auto
+  intra_op_threads: 4
+  free_dimension_overrides:
+    batch: 1
+visualization:
+  debug: false
+  joint_confidence_threshold: 0.3
+  max_overlay_age_seconds: 0.75
+  window_name: Local Posture and Fall Detection
+events:
+  path: outputs/events.jsonl
+logging:
+  level: INFO

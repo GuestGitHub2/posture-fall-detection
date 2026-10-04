@@ -1,0 +1,4 @@
+pose:
+  model: rtmpose_m
+  model_path: models/rtmpose_m.onnx
+  detector_path: models/yolox_tiny.onnx
