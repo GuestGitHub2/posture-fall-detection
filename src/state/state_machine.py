@@ -22,9 +22,9 @@ STATE_DEFAULTS = {
     "possible_confirmation_seconds": 0.08,
     "max_prediction_gap_seconds": 0.5,
     "recovery_seconds": 3.0,
-    "recovery_postures": ["standing", "sitting", "kneeling"],
+    "recovery_postures": ["standing", "sitting", "kneeling", "upright_partial"],
     "rearm_seconds": 1.0,
-    "rearm_postures": ["standing", "sitting"],
+    "rearm_postures": ["standing", "sitting", "upright_partial"],
     "missing_unknown_seconds": 0.5,
 }
 LOG = logging.getLogger(__name__)
@@ -77,6 +77,10 @@ class PersonStateMachine:
         self._last_vote = "UNKNOWN"
 
     @property
+    def posture(self) -> str:
+        return self._posture
+
+    @property
     def armed(self) -> bool:
         return self._armed
 
@@ -102,7 +106,7 @@ class PersonStateMachine:
         self._posture = self.state = "UNKNOWN"
         self.disarm()
 
-    def missing(self, timestamp: float) -> StateResult:
+    def missing(self, timestamp: float, fall: FallResult | None = None) -> StateResult:
         self._interrupted = True
         self._recovery_since = self._rearm_since = None
         if (
@@ -111,6 +115,10 @@ class PersonStateMachine:
         ):
             self._reset_predictions()
             self.state = "FALLEN" if self._fallen else "UNKNOWN"
+        if not self._fallen and fall is not None and fall.features.get("held_possible", 0):
+            self.state = "FALLING"
+        elif not self._fallen and self.state == "FALLING":
+            self.state = "UNKNOWN"
         return StateResult(self.state)
 
     def update(self, posture: PostureResult, fall: FallResult, timestamp: float) -> StateResult:
@@ -134,6 +142,14 @@ class PersonStateMachine:
             self._vote_since = timestamp
         self._last_vote = vote
         self._votes.append(vote)
+        if vote.endswith("_PARTIAL") and self._posture not in {
+            "UNKNOWN",
+            "UPRIGHT_PARTIAL",
+            "BENT_PARTIAL",
+            "HORIZONTAL_PARTIAL",
+        }:
+            # Loss of observability must not hold a precise standing/sitting claim.
+            self._posture = vote
         if (
             len(self._votes) >= c["posture_confirmation_frames"]
             and list(self._votes)[-c["posture_confirmation_frames"] :]
@@ -153,7 +169,11 @@ class PersonStateMachine:
                 self._fall_duration = self._possible_duration = 0.0
                 self._confirmed_previous = self._possible_previous = False
                 self._last_valid = None
-            self.state = "FALLEN" if self._fallen else self._posture
+            self.state = (
+                "FALLEN"
+                if self._fallen
+                else ("FALLING" if fall.features.get("held_possible", 0) else self._posture)
+            )
             return StateResult(self.state)
         delta = (
             timestamp - self._last_valid

@@ -57,6 +57,7 @@ class Pose:
     scale_source: str = "unmeasured"
     scale_quality: float = 0.0
     scale_is_stable: bool = False
+    image_size: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         self.keypoints = np.asarray(self.keypoints, dtype=np.float32).copy()

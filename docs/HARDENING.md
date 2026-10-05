@@ -5,6 +5,11 @@ posture and temporal fall status stay separate. No production temporal model was
 trained or fabricated. This document records behavior and compatibility changes,
 not evidence of better held-out fall accuracy.
 
+The later [visibility-aware extension](VISIBILITY.md) supersedes the original
+ankle-required heuristic and posture behavior described below. It retains the
+identity/runtime safeguards while adding torso-only evidence tiers, coarse
+postures, bounded possible-only disappearance and upright-partial rearming.
+
 ## Identity and temporal evidence
 
 Association uses predicted translation plus IoU, body-relative bbox-center and

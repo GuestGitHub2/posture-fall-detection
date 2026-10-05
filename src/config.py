@@ -215,6 +215,9 @@ def validate_config(config: dict[str, Any]) -> None:
             "controlled_confirmation_seconds",
             "controlled_window_seconds",
             "controlled_hold_seconds",
+            "partial_lying_persistence_seconds",
+            "partial_maximum_settling_velocity",
+            "disappearance_possible_seconds",
         ),
         "state": ("rearm_seconds", "max_prediction_gap_seconds"),
         "events": ("episode_retention_seconds", "episode_match_distance"),
@@ -238,6 +241,23 @@ def validate_config(config: dict[str, Any]) -> None:
     if config["fall"]["minimum_confident_joints_per_pair"] > 2:
         raise ValueError("fall.minimum_confident_joints_per_pair cannot exceed 2")
     fall = config["fall"]
+    if not 0 <= config["posture"]["label_hysteresis_margin"] <= 1:
+        raise ValueError("posture.label_hysteresis_margin must be between zero and one")
+    for key in ("partial_evidence_multiplier", "partial_max_torso_scale_ratio"):
+        value = fall[key]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value <= 1
+        ):
+            raise ValueError(f"fall.{key} must be finite and exceed one")
+    if fall["partial_minimum_downward_fraction"] < fall["slow_minimum_downward_fraction"]:
+        raise ValueError("Partial evidence must require at least the slow-path consistency")
+    if fall["partial_lying_persistence_seconds"] < max(
+        fall["lying_persistence_seconds"], fall["slow_lying_persistence_seconds"]
+    ):
+        raise ValueError("Partial persistence must be at least full-body persistence")
     if (
         fall["detector"] == "heuristic"
         and not fall["minimum_motion_seconds"]
@@ -282,7 +302,16 @@ def validate_config(config: dict[str, Any]) -> None:
             or not values
             or not all(
                 isinstance(value, str)
-                and value in {"standing", "sitting", "bending", "squatting", "kneeling"}
+                and value
+                in {
+                    "standing",
+                    "sitting",
+                    "bending",
+                    "squatting",
+                    "kneeling",
+                    "upright_partial",
+                    "bent_partial",
+                }
                 for value in values
             )
         ):

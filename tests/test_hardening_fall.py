@@ -145,8 +145,8 @@ def test_brief_low_quality_burst_preserves_candidate_but_cannot_confirm(joints, 
         result = detector.update(1, pose, index / 15)
         results.append(result)
         if 12 <= index < 12 + missing_count:
-            assert result.status == "normal"
-            assert result.features["measurement_valid"] == 0
+            assert result.status == "possible_fall"
+            assert result.features["measurement_valid"] == int(joints == (15, 16))
             assert detector.histories[1].candidate_at is not None
     assert any(result.status == "fall" for result in results)
 

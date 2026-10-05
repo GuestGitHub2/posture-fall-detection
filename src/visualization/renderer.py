@@ -7,6 +7,7 @@ import numpy as np
 
 from src.pipeline import PipelineResult
 from src.pose.pose_types import SKELETON_EDGES
+from src.pose.visibility import assess_visibility
 
 
 def overlay_is_current(
@@ -89,16 +90,23 @@ class Renderer:
                     if confidence >= threshold:
                         cv2.circle(image, (int(x), int(y)), 3, color, -1, cv2.LINE_AA)
                 labels = [
-                    f"ID {person.track_id}  {state}",
-                    f"{person.posture.label.upper()} {person.posture.confidence:.2f}",
-                    f"Fall: {person.fall.probability:.2f}"
+                    f"ID {person.track_id}  State: {state}",
+                    f"Raw: {person.posture.label.upper()} {person.posture.confidence:.2f}",
+                    f"Final posture: {person.smoothed_posture}",
+                    f"Fall: {person.fall.status.upper()} {person.fall.probability:.2f}"
                     + ("  missing" if not person.observed else ""),
                 ]
                 if self.debug:
                     features = {**person.posture.features, **person.fall.features}
+                    visibility = person.posture.visibility or assess_visibility(
+                        person.pose, threshold
+                    )
+                    labels.append(f"Visibility: {visibility.mode}")
                     labels.append(
                         f"Pose quality: {person.posture.pose_quality:.2f} | Match: {person.association_confidence:.2f}"
                     )
+                    if not person.observed:
+                        labels.append("Raw observation held; person missing")
                     labels.append(
                         f"Scale: {person.pose.scale_source} ({person.pose.scale_quality:.2f})"
                     )
@@ -112,7 +120,7 @@ class Renderer:
                     ):
                         if name in features:
                             labels.append(f"{name}: {features[name]:.2f}")
-                origin_y = max(100, y1)
+                origin_y = max(100, min(y1, height - 12 - 21 * (len(labels) - 1)))
                 for row, label in enumerate(labels):
                     self._text(
                         image,

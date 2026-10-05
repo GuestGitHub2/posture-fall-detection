@@ -159,13 +159,21 @@ Ctrl+C; `--max-frames 300` makes a bounded smoke run. Camera recording uses the
 configured FPS; recording FPS may differ from actual camera delivery if hardware
 cannot sustain it. Source video FPS is preserved; original audio is not copied.
 
-Each overlay shows track ID, skeleton, box, posture/confidence, fall score and final
-state. The status bar shows capture FPS, pose FPS, processing FPS, inference latency,
+Each overlay shows track ID, skeleton, box, **Raw** posture/confidence, **Final
+posture** after smoothing, and the combined **State** plus temporal fall status/score.
+The status bar shows capture FPS, pose FPS, processing FPS, inference latency,
 provider and person count. FALLEN is highlighted in red. Debug view includes torso
 angle, box aspect ratio, normalized downward hip velocity, pose quality,
 association confidence and body-scale measurement source/quality. Posture
 confidence now incorporates geometric rule margins as well as joint quality;
-`PostureResult.pose_quality` exposes the latter separately.
+`PostureResult.pose_quality` exposes observed-joint quality separately from
+coverage. Debug view also shows group-based visibility: FULL_BODY, LOWER_PARTIAL,
+TORSO, UPPER_ONLY or INSUFFICIENT. Reliable shoulders and hips without useful legs
+produce `upright_partial`, `bent_partial` or `horizontal_partial`; they do not
+claim standing versus sitting. Head/shoulders alone remain insufficient. Rule
+memberships overlap near thresholds, with independent per-track classification
+hysteresis before state smoothing. No invisible keypoints are fabricated.
+See [partial-body behavior and settings](docs/VISIBILITY.md).
 
 ## Configuration
 
@@ -238,20 +246,27 @@ substantially slower than warm inference. See
 ## Temporal falls and events
 
 The rapid path combines normalized hip/shoulder descent, torso rotation,
-transition to lying, proximity to the origin's ankle/floor plane and lying
+transition to lying/horizontal, available ankle/floor evidence and lying
 persistence. A separate conservative slow-collapse path uses 1.2–2.5 seconds of
 mostly downward motion, substantial cumulative descent and longer lying
 persistence. Strong transitions may begin from bending or low postures. A bed or
-sofa transition ending above the original ankle plane cannot confirm a fall from
-horizontal posture alone. Intent cannot be determined reliably from 2D skeletons.
+sofa transition cannot confirm from horizontal posture alone. When a reliable
+origin ankle plane exists, an elevated endpoint still vetoes confirmation even
+after ankles disappear. Torso-only observations require stronger consistent
+descent/rotation, bounded torso scale changes, settling and longer horizontal
+persistence. Without a floor proxy, intentional lying and falls may be
+indistinguishable from the same 2D motion.
 
 Short weak-pose intervals suspend motion and confirmation while preserving valid
 evidence. Sustained unreliability, clock regression, long valid-pose gaps,
 expired tracks or ambiguous association reset that evidence. Confirmation
 accumulates valid prediction duration in seconds; weak or absent intervals do
-not count. The state machine maintains FALLING,
+not count. Missing knees/ankles alone do not suspend valid torso analysis. Strong
+candidates can remain possible briefly after disappearance, without accruing
+confirmation or emitting a fall event. The state machine maintains FALLING,
 FALLEN and RECOVERING separately from posture. A person initially lying receives
-LYING until temporal fall evidence is present. Heuristic scores are evidence
+LYING (or HORIZONTAL_PARTIAL) until temporal fall evidence is present. Stable
+UPRIGHT_PARTIAL can support timed recovery and rearming. Heuristic scores are evidence
 scores, not calibrated clinical probabilities.
 
 Events append to `outputs/events.jsonl`, including UTC timestamp, source/video
@@ -407,8 +422,10 @@ counts. The separate GUI smoke included a detected partial person.
 - **Accelerator error:** fallback is automatic; force `--provider cpu` to isolate
   model versus device problems. Install only one ORT distribution.
 - **Slow startup:** first CoreML compilation is expected; benchmark warmed runs.
-- **Low confidence/partial bodies:** posture may be UNKNOWN; improve framing and
-  lighting rather than reducing every confidence threshold.
+- **Partial bodies:** inspect Visibility and Raw in debug mode. Reliable torso
+  groups give useful coarse labels; head/shoulders without reliable hips remain
+  UNKNOWN. High observed-joint quality alone does not establish body coverage.
+  Improve lighting or camera coverage when the root cannot be observed.
 - **ID loss while crossing:** this tracker deliberately abstains at near ties.
   Histories are invalidated and IDs may be lost rather than carry uncertain fall
   evidence across people. Complete overlap remains unresolvable without more

@@ -64,13 +64,16 @@ def test_disappearance_or_new_track_cannot_reuse_another_person_fall():
     assert 1 not in detector.histories
 
 
-def test_low_confidence_ankles_suspend_candidate_without_fabricating_ground():
+def test_low_confidence_ankles_use_torso_candidate_without_fabricating_ground():
     detector = HeuristicFallDetector()
     for index in range(12):
         detector.update(1, fall_pose(min(1, max(0, (index / 15 - 0.4) / 0.4))), index / 15)
     occluded = fall_pose(1)
     occluded.keypoints[[15, 16], 2] = 0.1
-    assert detector.update(1, occluded, 0.8).status == "normal"
+    result = detector.update(1, occluded, 0.8)
+    assert result.status == "possible_fall"
+    assert result.features["measurement_valid"] == 1
+    assert result.features["floor_available"] == 0
     results = [detector.update(1, fall_pose(1), index / 15) for index in range(13, 30)]
     assert results[0].status == "possible_fall"
     assert any(result.status == "fall" for result in results)

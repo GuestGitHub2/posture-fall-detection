@@ -228,7 +228,7 @@ def test_partial_lying_body_with_missing_ankles_has_posture_without_fall():
         pose.keypoints[[15, 16], 2] = 0
         result = pipeline.process_poses([pose], index / 15)
         assert result.persons[0].fall.status == "normal"
-    assert result.persons[0].state == "LYING"
+    assert result.persons[0].state == "HORIZONTAL_PARTIAL"
 
 
 def test_scale_gate_retains_reliable_reference_after_one_weak_measurement():

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from src.pose.pose_types import Pose
+from src.pose.visibility import reliable_joints
 
 SCALE_DEFAULTS = {
     "scale_ema_seconds": 0.6,
@@ -20,7 +21,7 @@ SCALE_DEFAULTS = {
 def joint_center(pose: Pose, indices: tuple[int, ...], threshold: float = 0.3) -> np.ndarray | None:
     """Return the mean of visible joints, or None if none are reliable."""
     joints = pose.keypoints[list(indices)]
-    valid = joints[:, 2] >= threshold
+    valid = reliable_joints(pose, threshold)[list(indices)]
     return joints[valid, :2].mean(axis=0) if valid.any() else None
 
 
@@ -42,7 +43,7 @@ def measure_body_scale(pose: Pose, threshold: float = 0.3) -> ScaleMeasurement:
     legs = []
     for hip, knee, ankle in ((11, 13, 15), (12, 14, 16)):
         joints = pose.keypoints[[hip, knee, ankle]]
-        if np.all(joints[:, 2] >= threshold):
+        if reliable_joints(pose, threshold)[[hip, knee, ankle]].all():
             legs.append(
                 float(
                     np.linalg.norm(joints[0, :2] - joints[1, :2])
@@ -67,7 +68,7 @@ def normalize_pose(
         raise ValueError("Body scale must be finite and positive")
     center = joint_center(pose, (11, 12), confidence_threshold)
     if center is None:
-        visible = pose.keypoints[:, 2] >= confidence_threshold
+        visible = reliable_joints(pose, confidence_threshold)
         center = (
             pose.keypoints[visible, :2].mean(axis=0)
             if visible.any()
@@ -76,6 +77,7 @@ def normalize_pose(
     normalized = pose.keypoints.copy()
     normalized[:, :2] = (normalized[:, :2] - center) / scale
     normalized[normalized[:, 2] < confidence_threshold, :2] = 0.0
+    normalized[~reliable_joints(pose, 0.0)] = 0.0
     return Pose(
         pose.keypoints,
         pose.bbox,
@@ -86,6 +88,7 @@ def normalize_pose(
         measurement.source,
         measurement.quality,
         body_scale is not None,
+        pose.image_size,
     )
 
 
@@ -97,9 +100,24 @@ class StableBodyScale:
         self.value: float | None = None
         self._measurements: deque[tuple[float, float]] = deque()
         self._last_reliable: float | None = None
+        self._torso_value: float | None = None
+        self._last_torso: float | None = None
 
     def apply(self, pose: Pose, timestamp: float, threshold: float = 0.3) -> Pose:
         measurement = measure_body_scale(pose, threshold)
+        if measurement.source == "torso" and self.value is None:
+            if self._torso_value is None:
+                self._torso_value = measurement.value
+            else:
+                ratio = self.config["scale_max_change_ratio"]
+                target = float(
+                    np.clip(measurement.value, self._torso_value / ratio, self._torso_value * ratio)
+                )
+                alpha = 1 - np.exp(
+                    -max(0, timestamp - self._last_torso) / self.config["scale_ema_seconds"]
+                )
+                self._torso_value += float(alpha * (target - self._torso_value))
+            self._last_torso = timestamp
         while (
             self._measurements
             and timestamp - self._measurements[0][0] > self.config["scale_window_seconds"]
@@ -122,5 +140,9 @@ class StableBodyScale:
                 self.value += float(alpha * (target - self.value))
             self._last_reliable = timestamp
         return normalize_pose(
-            pose, threshold, body_scale=self.value if self.value is not None else measurement.value
+            pose,
+            threshold,
+            body_scale=self.value
+            if self.value is not None
+            else (self._torso_value if measurement.source == "torso" else measurement.value),
         )

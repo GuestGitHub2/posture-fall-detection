@@ -12,10 +12,10 @@ def test_required_postures_at_different_sizes(label, scale, offset):
     assert result.confidence > 0.8
 
 
-def test_low_confidence_or_missing_legs_yields_unknown():
+def test_low_confidence_yields_unknown_but_reliable_torso_is_useful():
     pose = skeleton()
     pose.keypoints[:, 2] = 0.1
     assert PostureClassifier().classify(pose).label == "unknown"
     pose = skeleton()
     pose.keypoints[13:, 2] = 0
-    assert PostureClassifier().classify(pose).label == "unknown"
+    assert PostureClassifier().classify(pose).label == "upright_partial"

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
 from src.pose.normalization import joint_center, normalize_pose
 from src.pose.pose_types import Pose
+from src.pose.visibility import assess_visibility, reliable_joints
 
 
 def joint_angle(
@@ -24,6 +26,10 @@ def joint_angle(
 
 
 def extract_features(pose: Pose, threshold: float = 0.3) -> dict[str, float]:
+    visibility = assess_visibility(pose, threshold)
+    points = pose.keypoints.copy()
+    points[~reliable_joints(pose, threshold), 2] = 0
+    pose = replace(pose, keypoints=points)
     pose = normalize_pose(pose, threshold) if pose.normalized is None else pose
     shoulders = joint_center(pose, (5, 6), threshold)
     hips = joint_center(pose, (11, 12), threshold)
@@ -34,9 +40,19 @@ def extract_features(pose: Pose, threshold: float = 0.3) -> dict[str, float]:
         "body_scale": float(pose.body_scale),
         "visible_joints": float(np.sum(pose.keypoints[:, 2] >= threshold)),
         "joint_confidence": float(pose.keypoints[[5, 6, 11, 12, 13, 14, 15, 16], 2].mean()),
-        "pose_quality": float(pose.keypoints[[5, 6, 11, 12, 13, 14, 15, 16], 2].mean()),
+        "pose_quality": float(pose.keypoints[:, 2][pose.keypoints[:, 2] >= threshold].mean())
+        if np.any(pose.keypoints[:, 2] >= threshold)
+        else 0.0,
+        "torso_quality": visibility.torso_quality,
+        "torso_observable": float(visibility.torso_observable),
+        "complete_leg": float(visibility.complete_leg),
         "scale_quality": pose.scale_quality,
     }
+    features.update({f"{name}_count": float(count) for name, count in visibility.counts.items()})
+    features.update(
+        bbox_center_y=float((pose.bbox[1] + pose.bbox[3]) / 2),
+        bbox_center_x=float((pose.bbox[0] + pose.bbox[2]) / 2),
+    )
     if hips is not None:
         features.update(hip_x=float(hips[0]), hip_y=float(hips[1]))
     if shoulders is not None:
@@ -47,6 +63,7 @@ def extract_features(pose: Pose, threshold: float = 0.3) -> dict[str, float]:
             features["torso_angle"] = math.degrees(
                 math.atan2(abs(float(vector[0])), abs(float(vector[1])))
             )
+            features["torso_length"] = float(np.linalg.norm(vector))
             features["shoulder_hip_height"] = float(vector[1] / pose.body_scale)
     knee_angles = [
         joint_angle(pose.keypoints, indices, threshold) for indices in ((11, 13, 15), (12, 14, 16))

@@ -27,6 +27,7 @@ class PersonSnapshot:
     last_seen: float
     association_confidence: float = 1.0
     association_ambiguous: bool = False
+    smoothed_posture: str = "UNKNOWN"
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,8 @@ class Pipeline:
             )
         started = time.perf_counter()
         poses = self.estimator.infer(frame, timestamp)
+        for pose in poses:
+            pose.image_size = (frame.shape[1], frame.shape[0])
         pose_ms = (time.perf_counter() - started) * 1000
         result = self.process_poses(poses, timestamp)
         result.timings["pose_ms"] = pose_ms
@@ -106,6 +109,8 @@ class Pipeline:
             self._snapshots.pop(removed, None)
             self.fall_detector.remove(removed)
             self._epochs.pop(removed, None)
+            if hasattr(self.posture_classifier, "remove"):
+                self.posture_classifier.remove(removed)
         persons: list[PersonSnapshot] = []
         posture_ms = fall_ms = 0.0
         for track in tracks:
@@ -121,6 +126,8 @@ class Pipeline:
             machine = self._machines[track.track_id]
             if self._epochs.get(track.track_id, track.history_epoch) != track.history_epoch:
                 self.fall_detector.remove(track.track_id)
+                if hasattr(self.posture_classifier, "remove"):
+                    self.posture_classifier.remove(track.track_id)
                 machine.invalidate_identity()
                 if self.episodes.quarantine(track.track_id, track.pose):
                     machine.disarm(
@@ -130,7 +137,11 @@ class Pipeline:
             self._epochs[track.track_id] = track.history_epoch
             if track.observed:
                 begin = time.perf_counter()
-                posture = self.posture_classifier.classify(track.pose)
+                posture = (
+                    self.posture_classifier.classify_tracked(track.pose, track.track_id)
+                    if hasattr(self.posture_classifier, "classify_tracked")
+                    else self.posture_classifier.classify(track.pose)
+                )
                 posture_ms += (time.perf_counter() - begin) * 1000
                 begin = time.perf_counter()
                 fall = self.fall_detector.update(track.track_id, track.pose, timestamp, posture)
@@ -169,24 +180,29 @@ class Pipeline:
                     track.last_seen,
                     track.association_confidence,
                     False,
+                    machine.posture,
                 )
             else:
                 previous = self._snapshots.get(track.track_id)
                 if previous is None:
                     continue
-                state = machine.missing(timestamp)
+                fall = (
+                    self.fall_detector.missing(track.track_id, timestamp)
+                    if hasattr(self.fall_detector, "missing") and not track.association_ambiguous
+                    else FallResult(features={"measurement_valid": 0.0})
+                )
+                state = machine.missing(timestamp, fall)
                 snapshot = PersonSnapshot(
                     track.track_id,
                     track.pose,
                     previous.posture,
-                    FallResult(features={"measurement_valid": 0.0})
-                    if track.association_ambiguous
-                    else previous.fall,
+                    fall,
                     state.state,
                     False,
                     track.last_seen,
                     track.association_confidence,
                     track.association_ambiguous,
+                    machine.posture,
                 )
             self._snapshots[track.track_id] = snapshot
             persons.append(snapshot)
