@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from src.fall.normalization import FALL_NORMALIZATION
 from training.dataset import fall_windows, load_records, normalize_keypoints
 
 
@@ -157,12 +158,16 @@ def predict_checkpoint(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     import torch
 
-    from training.models import build_model
-
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     metadata = checkpoint["metadata"]
     if metadata["kind"] != mode:
         raise ValueError(f"Checkpoint kind {metadata['kind']} does not match --mode {mode}")
+    if mode == "fall" and metadata.get("normalization") != FALL_NORMALIZATION:
+        raise ValueError(
+            f"Fall checkpoint requires {FALL_NORMALIZATION}; per-frame centered weights must be retrained"
+        )
+    from training.models import build_model
+
     model = build_model(metadata)
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
@@ -185,7 +190,13 @@ def predict_checkpoint(
         ]
     else:
         values, targets, rows = fall_windows(
-            records, metadata["samples"], metadata["history_seconds"], 0.25
+            records,
+            metadata["samples"],
+            metadata["history_seconds"],
+            0.25,
+            metadata.get("max_gap_seconds", 0.5),
+            metadata.get("minimum_joint_confidence", 0.4),
+            metadata.get("minimum_scale_quality", 0.6),
         )
         values = values.transpose(0, 3, 1, 2)[..., None]
         labels = [metadata["classes"][target] for target in targets]

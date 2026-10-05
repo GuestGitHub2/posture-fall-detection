@@ -30,14 +30,23 @@ flowchart LR
 Camera capture and inference run in separate threads. The camera retains the
 latest frame; inference consumes recent frames at a configurable 10/15/30 FPS
 target, avoiding a growing queue. Rendering uses the latest inference result and
-discards stale overlays. File processing uses source timestamps and preserves
-the original FPS in recordings. Posture, fall probability and final state remain
+discards overlays older than 0.25 seconds or eight captured frames by default.
+File processing prefers valid monotonic media timestamps, including VFR input.
+OpenCV recordings use the source's nominal constant FPS; VFR timing and audio
+are not retained in the output. Posture, fall probability and final state remain
 separate throughout the pipeline.
 
-The tracker assigns unique IDs using bounding-box overlap and visible-joint
-distance with Hungarian assignment. Each ID owns its buffer and state machine.
-Tracks survive short misses; long gaps reset motion evidence. Limb lengths scale
-skeleton coordinates and motion, avoiding pixel-based fall thresholds.
+The tracker combines predicted motion, body-relative box-center distance, IoU,
+visible-joint distance and reliable scale consistency. Hungarian matches must be
+unambiguous on both sides; near ties remain lost and invalidate the affected
+motion histories and state latches. IDs are never reused. Short unambiguous
+occlusions retain IDs. Reliable rolling medians and a time-based EMA stabilize
+each person's body scale when ankles or other joints disappear.
+
+[Hardening details and configuration reference](docs/HARDENING.md) describe the
+association gates, temporal confirmation, normalization contract and regression
+coverage. These changes are engineering safeguards; no held-out accuracy claim
+is made.
 
 ## Installation: Apple Silicon macOS
 
@@ -153,7 +162,10 @@ cannot sustain it. Source video FPS is preserved; original audio is not copied.
 Each overlay shows track ID, skeleton, box, posture/confidence, fall score and final
 state. The status bar shows capture FPS, pose FPS, processing FPS, inference latency,
 provider and person count. FALLEN is highlighted in red. Debug view includes torso
-angle, box aspect ratio and normalized downward hip velocity.
+angle, box aspect ratio, normalized downward hip velocity, pose quality,
+association confidence and body-scale measurement source/quality. Posture
+confidence now incorporates geometric rule margins as well as joint quality;
+`PostureResult.pose_quality` exposes the latter separately.
 
 ## Configuration
 
@@ -172,17 +184,20 @@ pose:
   inference_fps: 15
   confidence_threshold: 0.3
 tracking:
-  max_missing_frames: 15
+  max_missing_frames: 0
   max_missing_seconds: 1.0
 posture:
   smoothing_frames: 5
 fall:
   detector: heuristic
-  history_seconds: 2.0
+  history_seconds: 2.5
   possible_threshold: 0.55
   confirmed_threshold: 0.80
-  confirmation_frames: 3
+  possible_confirmation_seconds: 0.08
+  fall_confirmation_seconds: 0.20
   recovery_seconds: 3.0
+state:
+  rearm_seconds: 1.0
 runtime:
   provider: auto
 ```
@@ -222,19 +237,32 @@ substantially slower than warm inference. See
 
 ## Temporal falls and events
 
-The heuristic combines normalized hip/shoulder descent, torso rotation, resulting
-lying posture, hip-to-ankle ground relation and lying persistence within a recent
-2-second history. Low joint
-confidence, gaps and disappearing tracks cannot independently confirm a fall.
-The state machine requires consecutive predictions and maintains FALLING,
+The rapid path combines normalized hip/shoulder descent, torso rotation,
+transition to lying, proximity to the origin's ankle/floor plane and lying
+persistence. A separate conservative slow-collapse path uses 1.2–2.5 seconds of
+mostly downward motion, substantial cumulative descent and longer lying
+persistence. Strong transitions may begin from bending or low postures. A bed or
+sofa transition ending above the original ankle plane cannot confirm a fall from
+horizontal posture alone. Intent cannot be determined reliably from 2D skeletons.
+
+Short weak-pose intervals suspend motion and confirmation while preserving valid
+evidence. Sustained unreliability, clock regression, long valid-pose gaps,
+expired tracks or ambiguous association reset that evidence. Confirmation
+accumulates valid prediction duration in seconds; weak or absent intervals do
+not count. The state machine maintains FALLING,
 FALLEN and RECOVERING separately from posture. A person initially lying receives
 LYING until temporal fall evidence is present. Heuristic scores are evidence
 scores, not calibrated clinical probabilities.
 
 Events append to `outputs/events.jsonl`, including UTC timestamp, source/video
-timestamp, track ID, confidence and posture. One episode emits one fall event;
-recovery and cooldown control rearming. A lost/reassigned track cannot guarantee
-episode-level deduplication across identities. Future local integrations use the
+timestamp, track ID, episode ID, confidence and posture. One episode emits one
+fall event. Confirmed recovery followed by stable upright rearming permits an
+independent second event, even inside the old cooldown interval. A spatial alert
+guard conservatively suppresses duplicate alerts after uncertain ID loss; it
+does not transfer histories or labels. It applies to new/invalidated IDs when
+the original owner is lost, preserving independent continuously tracked people.
+Identity and episode continuity cannot be guaranteed through complete occlusion.
+Future local integrations use the
 same interface:
 
 ```python
@@ -268,11 +296,18 @@ noise/dropout, mirror flipping, confidence variation and causal temporal croppin
 and uses skeletons extracted once rather than raw video every epoch.
 
 The learned fall contract is float32 **[N,C,T,V,M] = [1,3,48,17,1]**, with
-hip-centered x/y scaled by torso-plus-leg length and joint confidence, uniformly
-sampled over two seconds. Missing joints/long gaps have zero confidence; short
+`window_root_v1`: x/y relative to the **first reliable hip center in the window**,
+using one **median reliable torso-plus-leg scale for the entire window**, plus
+joint confidence. This retains global root descent. The default window is
+2.5 seconds. Posture inputs remain per-frame hip centered. Missing joints/long
+gaps have zero confidence; short
 gaps are interpolated without extrapolating beyond observed times. Configure
 `fall.detector: stgcn`, `fall.model_path`, `fall.sample_count`, `fall.classes`
 and `fall.output_kind: logits` or `probabilities` to match the actual export.
+Keep the exported `.metadata.json` alongside the ONNX file. Existing fall weights
+trained on independently centered frames require retraining; changing a metadata
+string cannot make them compatible. The adapter and checkpoint evaluator reject
+incompatible declared normalization.
 An arbitrary action-recognition model may use different joints, preprocessing
 and classes and must be converted before use. Read [training/README.md](training/README.md)
 for annotation format, learned posture activation and export instructions.
@@ -298,11 +333,20 @@ sensitivity, specificity, precision/F1; per-sequence outcomes; alarm episodes;
 and detection latency where fall-onset annotations exist. False alarms per hour
 require continuous annotated normal exposure; missing time is excluded. Raw
 checkpoint evaluation measures model windows, while production detector
-evaluation should supply predictions after its state machine/cooldown. See the
+evaluation should supply events/decisions after its episode state machine. See the
 training guide for the exact evaluation protocol and limitations. Prioritize
 fall recall, false alarms on each hard-negative category, then latency.
 
 ## Benchmarks and checks
+
+Fresh hardening checks used the existing M5 Pro installation and retained
+CoreML. A warmed 60-frame one-person image run measured pose mean **12.19 ms**,
+total mean **12.68 ms**, total p95 **13.13 ms**, p99 **13.28 ms** and **78.83 FPS**,
+excluding capture/rendering. A 300-frame two-person skeleton-only run measured
+total mean **0.76 ms**, p95 **0.82 ms** and **1265 FPS**, excluding pose inference.
+A 60-frame headless webcam smoke and a 60-frame annotated video-file smoke also
+completed. See `outputs/hardening_validation.json` and the hardening benchmark
+JSON files. These verify execution and timing, not real fall accuracy.
 
 ```sh
 python tools/benchmark.py --synthetic --frames 300
@@ -321,7 +365,8 @@ inference. A still-image benchmark measures actual model inference but does not
 validate action detection or webcam latency. See `artifacts/` and `outputs/`
 for verification results obtained in this checkout.
 
-Measured on this **M5 Pro, 24 GB RAM, 18 CPU cores** using native arm64 Python
+The original baseline measurements below predate hardening. They were obtained
+on this **M5 Pro, 24 GB RAM, 18 CPU cores** using native arm64 Python
 3.12.14, ONNX Runtime 1.30.0 and OpenCV 4.14.0, with four ORT CPU threads:
 
 | Mode/provider | Measured frames | Pose mean | Total mean | Total p95 | Total p99 | Unthrottled FPS |
@@ -364,9 +409,10 @@ counts. The separate GUI smoke included a detected partial person.
 - **Slow startup:** first CoreML compilation is expected; benchmark warmed runs.
 - **Low confidence/partial bodies:** posture may be UNKNOWN; improve framing and
   lighting rather than reducing every confidence threshold.
-- **ID changes while crossing:** this is a lightweight pose/box tracker without
-  appearance reidentification. Long occlusion or identical overlaps can reassign
-  IDs; keep independent histories and evaluate crowd scenarios before deployment.
+- **ID loss while crossing:** this tracker deliberately abstains at near ties.
+  Histories are invalidated and IDs may be lost rather than carry uncertain fall
+  evidence across people. Complete overlap remains unresolvable without more
+  identity information; evaluate crowded recordings before deployment.
 
 ## Licensing and remaining limitations
 

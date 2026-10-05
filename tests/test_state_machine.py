@@ -45,3 +45,30 @@ def test_low_confidence_pose_cannot_recover_fallen_person():
             machine.update(PostureResult("standing", 0.1), FallResult(), index / 10).state
             == "FALLEN"
         )
+
+
+def test_high_classification_confidence_does_not_override_low_pose_quality():
+    machine = PersonStateMachine()
+    weak = PostureResult("lying", 0.99, pose_quality=0.1)
+    for index in range(12):
+        state = machine.update(weak, FallResult("fall", 0.99), index / 10)
+        assert not state.fall_event and state.state != "FALLEN"
+    machine = PersonStateMachine({"confirmation_frames": 1, "recovery_seconds": 0.1})
+    machine.update(PostureResult("lying", 0.95), FallResult("fall", 0.95), 0)
+    for index in range(1, 12):
+        state = machine.update(
+            PostureResult("standing", 0.99, pose_quality=0.1), FallResult(), index / 10
+        )
+        assert state.state == "FALLEN" and not state.recovered_event
+
+
+def test_confident_posture_remains_independent_of_unusable_fall_geometry():
+    machine = PersonStateMachine()
+    for index in range(12):
+        result = machine.update(
+            PostureResult("lying", 0.9, pose_quality=0.7),
+            FallResult("normal", 0, {"measurement_valid": 0}),
+            index / 10,
+        )
+        assert not result.fall_event
+    assert result.state == "LYING"

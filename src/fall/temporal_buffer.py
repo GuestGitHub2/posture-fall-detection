@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.fall.normalization import interpolate_skeletons, normalize_fall_sequence
 from src.pose.normalization import normalize_pose
 from src.pose.pose_types import Pose
 
@@ -36,6 +37,8 @@ class TemporalBuffer:
         self._samples.clear()
 
     def append(self, pose: Pose, timestamp: float) -> bool:
+        if not np.isfinite(timestamp):
+            raise ValueError("Temporal timestamp must be finite")
         reset = bool(
             self._samples
             and (
@@ -50,6 +53,31 @@ class TemporalBuffer:
         while self._samples and timestamp - self._samples[0].timestamp > self.history_seconds:
             self._samples.popleft()
         return reset
+
+    def resample_fall(
+        self,
+        num_samples: int,
+        end_timestamp: float | None = None,
+        confidence_threshold: float = 0.3,
+        minimum_scale_quality: float = 0.6,
+    ) -> np.ndarray:
+        """Fixed window root/scale normalization preserves the fall's global descent."""
+        if num_samples < 2:
+            raise ValueError("At least two temporal samples are required")
+        samples = self.samples
+        if not samples:
+            return np.zeros((num_samples, 17, 3), np.float32)
+        end = samples[-1].timestamp if end_timestamp is None else end_timestamp
+        data, _ = normalize_fall_sequence(
+            [sample.pose for sample in samples], confidence_threshold, minimum_scale_quality
+        )
+        return interpolate_skeletons(
+            data,
+            np.asarray([sample.timestamp for sample in samples]),
+            np.linspace(end - self.history_seconds, end, num_samples),
+            self.max_gap_seconds,
+            confidence_threshold,
+        )
 
     def resample(
         self,

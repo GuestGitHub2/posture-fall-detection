@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cv2
 
+from src.capture.camera import VideoCapture
 from src.config import load_config
 from src.pose.base import create_pose_estimator
 from src.tracking.tracker import Tracker
@@ -58,12 +59,7 @@ def main() -> int:
             if destination.exists() and not args.overwrite:
                 logging.info("Skipping existing %s", destination)
                 continue
-            capture = cv2.VideoCapture(str(file))
-            if not capture.isOpened():
-                raise OSError(f"Cannot decode video: {file}")
-            fps = float(capture.get(cv2.CAP_PROP_FPS))
-            if not fps > 0:
-                fps = float(config["camera"]["fps"])
+            capture = VideoCapture(str(file), config["camera"])
             info = annotations.get(relative.as_posix(), {})
             if isinstance(info, str):
                 info = {"label": info}
@@ -75,11 +71,11 @@ def main() -> int:
             try:
                 with temporary.open("w", encoding="utf-8") as stream:
                     while True:
-                        success, frame = capture.read()
-                        if not success:
+                        packet = capture.read()
+                        if packet is None:
                             break
-                        timestamp = number / fps
-                        tracks = tracker.update(estimator.infer(frame, timestamp), timestamp)
+                        timestamp = packet.timestamp
+                        tracks = tracker.update(estimator.infer(packet.image, timestamp), timestamp)
                         label = info.get("label", args.label)
                         for segment in info.get("segments", []):
                             if float(segment["start"]) <= timestamp < float(segment["end"]):
@@ -97,11 +93,15 @@ def main() -> int:
                                 "label": label,
                                 "subject_id": info.get("subject_id"),
                                 "fall_onset": info.get("fall_onset"),
+                                "history_epoch": person.history_epoch,
+                                "association_confidence": person.association_confidence,
+                                "scale_source": person.pose.scale_source,
+                                "scale_quality": person.pose.scale_quality,
                             }
                             stream.write(json.dumps(row) + "\n")
                         number += 1
             finally:
-                capture.release()
+                capture.close()
             temporary.replace(destination)
             logging.info("Extracted %d frames: %s", number, destination)
     except (ValueError, KeyError, OSError, RuntimeError, ImportError, cv2.error) as error:

@@ -9,6 +9,17 @@ from src.pipeline import PipelineResult
 from src.pose.pose_types import SKELETON_EDGES
 
 
+def overlay_is_current(
+    result: PipelineResult, timestamp: float, frame_index: int | None, config: dict[str, Any]
+) -> bool:
+    age = timestamp - result.timestamp
+    if not 0 <= age <= config["max_overlay_age_seconds"]:
+        return False
+    if frame_index is not None and result.frame_index >= 0:
+        return 0 <= frame_index - result.frame_index <= config.get("max_overlay_frame_lag", 8)
+    return True
+
+
 class Renderer:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -32,11 +43,20 @@ class Renderer:
         stats: dict[str, Any],
         timestamp: float,
         paused: bool = False,
+        *,
+        frame_index: int | None = None,
     ) -> np.ndarray:
         image = frame.copy()
         height, width = image.shape[:2]
         visible = 0
-        if result and timestamp - result.timestamp <= self.config["max_overlay_age_seconds"]:
+        if (
+            result
+            and overlay_is_current(result, timestamp, frame_index, self.config)
+            and (
+                not stats.get("live", False)
+                or stats.get("age_ms", 0) / 1000 <= self.config["max_overlay_age_seconds"]
+            )
+        ):
             for person in result.persons:
                 if timestamp - person.last_seen > self.config["max_overlay_age_seconds"]:
                     continue
@@ -76,6 +96,14 @@ class Renderer:
                 ]
                 if self.debug:
                     features = {**person.posture.features, **person.fall.features}
+                    labels.append(
+                        f"Pose quality: {person.posture.pose_quality:.2f} | Match: {person.association_confidence:.2f}"
+                    )
+                    labels.append(
+                        f"Scale: {person.pose.scale_source} ({person.pose.scale_quality:.2f})"
+                    )
+                    if person.association_ambiguous:
+                        labels.append("Ambiguous association; history suspended")
                     for name in (
                         "torso_angle",
                         "bbox_aspect_ratio",

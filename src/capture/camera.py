@@ -105,14 +105,46 @@ class VideoCapture:
             self.fps = float(config["fps"])
             LOGGER.warning("Video FPS unavailable; using %.1f", self.fps)
         self.index = 0
+        self.clock = MediaClock(self.fps)
 
     def read(self) -> Frame | None:
         ok, image = self.cap.read()
         if not ok:
             return None
-        result = Frame(image, self.index, self.index / self.fps, time.monotonic())
+        timestamp = self.clock.timestamp(self.index, self.cap.get(cv2.CAP_PROP_POS_MSEC))
+        result = Frame(image, self.index, timestamp, time.monotonic())
         self.index += 1
         return result
 
     def close(self) -> None:
         self.cap.release()
+
+
+class MediaClock:
+    """Prefer strictly advancing media PTS; keep fallback time continuous and monotonic."""
+
+    def __init__(self, fps: float) -> None:
+        self.fps = fps
+        self.last: float | None = None
+        self._last_media: float | None = None
+        self.source = "fps"
+
+    def timestamp(self, index: int, position_msec: float) -> float:
+        media = position_msec / 1000
+        valid = (
+            np.isfinite(media)
+            and media >= 0
+            and (self._last_media is None or media > self._last_media)
+        )
+        # The first zero is valid; repeated zeros, regression and non-finite PTS are not.
+        if valid:
+            self._last_media = media
+        if valid and (self.last is None or media > self.last):
+            result = float(media)
+            self.source = "media"
+        else:
+            nominal = index / self.fps
+            result = nominal if self.last is None else max(nominal, self.last + 1 / self.fps)
+            self.source = "fps"
+        self.last = result
+        return result

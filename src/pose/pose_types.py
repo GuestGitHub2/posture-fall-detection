@@ -54,6 +54,9 @@ class Pose:
     normalized: NDArray[np.float32] | None = None
     timestamp: float = 0.0
     body_scale: float = 1.0
+    scale_source: str = "unmeasured"
+    scale_quality: float = 0.0
+    scale_is_stable: bool = False
 
     def __post_init__(self) -> None:
         self.keypoints = np.asarray(self.keypoints, dtype=np.float32).copy()

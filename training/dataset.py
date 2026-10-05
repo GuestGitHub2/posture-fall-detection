@@ -9,6 +9,13 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from src.fall.normalization import (
+    FALL_NORMALIZATION,
+    interpolate_skeletons,
+    normalize_fall_sequence,
+)
+from src.pose.pose_types import Pose
+
 COCO_FLIP = np.array([0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15])
 POSTURE_CLASSES = ("standing", "sitting", "bending", "lying", "squatting", "kneeling", "unknown")
 
@@ -24,6 +31,7 @@ class SkeletonRecord:
     subject_id: str | None = None
     fall_onset: float | None = None
     bbox: np.ndarray | None = None
+    history_epoch: int = 0
 
 
 def load_records(path: str | Path) -> list[SkeletonRecord]:
@@ -70,6 +78,7 @@ def load_records(path: str | Path) -> list[SkeletonRecord]:
                             str(row["subject_id"]) if row.get("subject_id") is not None else None,
                             float(row["fall_onset"]) if row.get("fall_onset") is not None else None,
                             bbox,
+                            int(row.get("history_epoch", 0)),
                         )
                     )
                 except (KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
@@ -159,24 +168,7 @@ def resample_sequence(
     lo = float(timestamps[0]) if start is None else start
     hi = float(timestamps[-1]) if end is None else end
     grid = np.linspace(lo, hi, samples)
-    output = np.zeros((samples, 17, 3), dtype=np.float32)
-    for joint in range(17):
-        visible = (points[:, joint, 2] >= 0.3) & np.isfinite(points[:, joint]).all(axis=1)
-        times = timestamps[visible]
-        values = points[visible, joint]
-        if not len(times):
-            continue
-        for index, moment in enumerate(grid):
-            insertion = int(np.searchsorted(times, moment))
-            if insertion < len(times) and abs(times[insertion] - moment) < 1e-6:
-                output[index, joint] = values[insertion]
-            elif 0 < insertion < len(times):
-                left, right = insertion - 1, insertion
-                gap = times[right] - times[left]
-                if 0 < gap <= max_gap_seconds:
-                    weight = (moment - times[left]) / gap
-                    output[index, joint] = values[left] * (1 - weight) + values[right] * weight
-    return output
+    return interpolate_skeletons(points, timestamps, grid, max_gap_seconds)
 
 
 def augment(
@@ -218,36 +210,77 @@ def augment(
 
 def sequence_groups(
     records: Iterable[SkeletonRecord],
-) -> dict[tuple[str, int], list[SkeletonRecord]]:
-    groups: dict[tuple[str, int], list[SkeletonRecord]] = {}
+) -> dict[tuple[str, int, int], list[SkeletonRecord]]:
+    groups: dict[tuple[str, int, int], list[SkeletonRecord]] = {}
     for record in records:
-        groups.setdefault((record.sequence_id, record.track_id), []).append(record)
-    return {key: sorted(rows, key=lambda row: row.timestamp) for key, rows in groups.items()}
+        groups.setdefault((record.sequence_id, record.track_id, record.history_epoch), []).append(
+            record
+        )
+    # Frame order is causal. Sorting by timestamp would hide clock regressions
+    # and interleave samples from opposite sides of a discontinuity.
+    return {
+        key: sorted(rows, key=lambda row: (row.frame_number, row.timestamp))
+        for key, rows in groups.items()
+    }
 
 
 def fall_windows(
     records: list[SkeletonRecord],
     samples: int = 48,
-    history_seconds: float = 2.0,
+    history_seconds: float = 2.5,
     stride_seconds: float = 0.5,
+    max_gap_seconds: float = 0.5,
+    confidence_threshold: float = 0.3,
+    minimum_scale_quality: float = 0.6,
 ) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
     """Create causal windows. A window is positive when its final annotation is fall."""
     windows, labels, metadata = [], [], []
-    for (sequence, track), rows in sequence_groups(records).items():
+    if history_seconds <= 0 or stride_seconds <= 0 or max_gap_seconds <= 0:
+        raise ValueError("Fall window durations and stride must be positive")
+    segments = []
+    for key, group in sequence_groups(records).items():
+        boundaries = (
+            [0]
+            + [
+                index
+                for index in range(1, len(group))
+                if not 0 < group[index].timestamp - group[index - 1].timestamp <= max_gap_seconds
+            ]
+            + [len(group)]
+        )
+        segments.extend(
+            (key, group[start:stop])
+            for start, stop in zip(boundaries[:-1], boundaries[1:], strict=True)
+        )
+    for (sequence, track, epoch), rows in segments:
         times = np.array([row.timestamp for row in rows])
-        poses = np.stack([normalize_keypoints(row.keypoints, bbox=row.bbox) for row in rows])
+        poses = []
+        for row in rows:
+            visible = row.keypoints[:, 2] >= confidence_threshold
+            low = row.keypoints[visible, :2].min(axis=0) if visible.any() else np.zeros(2)
+            high = row.keypoints[visible, :2].max(axis=0) if visible.any() else np.ones(2)
+            box = row.bbox if row.bbox is not None else np.r_[low, np.maximum(high, low + 1e-3)]
+            poses.append(Pose(row.keypoints, box))
         moment = float(times[0] + history_seconds)
         while moment <= times[-1] + 1e-6:
             start = int(np.searchsorted(times, moment - history_seconds, side="left"))
             stop = int(np.searchsorted(times, moment, side="right"))
-            if stop - start >= 2:
+            if stop - start >= 2 and np.all(
+                (np.diff(times[start:stop]) > 0) & (np.diff(times[start:stop]) <= max_gap_seconds)
+            ):
+                points, transform = normalize_fall_sequence(
+                    poses[start:stop], confidence_threshold, minimum_scale_quality
+                )
+                if not transform.reliable:
+                    moment += stride_seconds
+                    continue
                 windows.append(
-                    resample_sequence(
-                        poses[start:stop],
+                    interpolate_skeletons(
+                        points,
                         times[start:stop],
-                        samples,
-                        moment - history_seconds,
-                        moment,
+                        np.linspace(moment - history_seconds, moment, samples),
+                        max_gap_seconds,
+                        confidence_threshold,
                     )
                 )
                 label = rows[stop - 1].label
@@ -260,6 +293,10 @@ def fall_windows(
                         "track_id": track,
                         "timestamp": moment,
                         "fall_onset": rows[stop - 1].fall_onset,
+                        "history_epoch": epoch,
+                        "normalization": FALL_NORMALIZATION,
+                        "origin": transform.origin.tolist(),
+                        "body_scale": transform.scale,
                     }
                 )
             moment += stride_seconds

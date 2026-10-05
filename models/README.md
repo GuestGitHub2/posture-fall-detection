@@ -90,3 +90,12 @@ model must be trained on falls and hard negatives, with the exact normalization,
 joint layout, sequence duration and output class mapping used by the app. See
 `training/README.md` and `src/fall/stgcn.py` for the input contract. An action model
 trained on generic activities is not automatically a valid fall detector.
+
+Fall preprocessing now requires `normalization: window_root_v1`: a fixed first
+reliable window hip origin and a fixed robust body scale, preserving root descent.
+Per-frame hip-centered fall weights are incompatible and require retraining.
+Posture MLP preprocessing remains per-frame centered. Keep the trained fall
+ONNX `.metadata.json` sidecar with the model; class order, sampling duration,
+confidence thresholds and gap interpolation must match deployment. RTMO input
+remains BGR, top-left 114 padding, float32 NCHW with no pixel normalization;
+NMS uses restored unclipped boxes, clipping only retained boxes.

@@ -43,6 +43,11 @@ def provider_candidates(
         order = ["CUDAExecutionProvider", "OpenVINOExecutionProvider", "CPUExecutionProvider"]
     if requested.lower() != "auto":
         explicit = ALIASES.get(requested.lower(), requested)
+        if explicit not in set(ALIASES.values()):
+            raise ValueError(
+                f"Unsupported execution provider {requested!r}. Choose auto, coreml, cuda, "
+                "directml, openvino or cpu; only supported local providers are allowed."
+            )
         if explicit not in installed:
             LOG.warning(
                 "Requested provider %s is unavailable; using installed CPU fallback.", explicit

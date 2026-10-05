@@ -14,14 +14,27 @@ pose:
   nms_threshold: 0.45
   max_people: 30
 tracking:
-  max_missing_frames: 15
+  max_missing_frames: 0  # 0 disables the legacy frame cap; retention uses seconds.
   max_missing_seconds: 1.0
   matching_threshold: 0.75
   confidence_threshold: 0.3
-  iou_weight: 0.45
+  iou_weight: 0.30
+  center_weight: 0.25
+  skeleton_weight: 0.35
+  scale_weight: 0.10
+  max_center_distance: 0.9
   max_skeleton_distance: 0.8
+  max_scale_ratio: 1.8
+  minimum_common_joints: 4
+  minimum_sparse_iou: 0.3
+  ambiguity_margin: 0.035
+  minimum_association_confidence: 0.2
   velocity_smoothing: 0.6
   prediction_seconds: 0.5
+  scale_ema_seconds: 0.6
+  scale_window_seconds: 1.0
+  minimum_scale_quality: 0.6
+  scale_max_change_ratio: 1.25
 posture:
   confidence_threshold: 0.3
   minimum_visible_joints: 6
@@ -40,6 +53,11 @@ posture:
   squatting_hip_knee_height: 0.05
   kneeling_hip_ankle_height: 0.22
   confidence_ceiling: 0.97
+  confidence_boundary_fraction: 0.55
+  confidence_angle_margin: 20.0
+  confidence_knee_margin: 25.0
+  confidence_height_margin: 0.15
+  confidence_aspect_margin: 0.5
   smoothing_frames: 5
   joint_confidence_threshold: 0.3
   backend: rules
@@ -53,27 +71,58 @@ posture:
   - kneeling
   - unknown
 fall:
-  history_seconds: 2.0
+  history_seconds: 2.5
   max_samples: 90
   max_gap_seconds: 0.5
+  max_unreliable_seconds: 0.45
   minimum_joint_confidence: 0.4
+  minimum_pose_quality: 0.4
   motion_window_seconds: 0.9
   minimum_motion_seconds: 0.12
   upright_torso_angle: 30.0
+  maximum_origin_torso_angle: 75.0
   minimum_hip_drop: 0.24
   minimum_shoulder_drop: 0.2
   minimum_hip_velocity: 0.65
   maximum_hip_velocity: 5.0
   minimum_torso_rotation: 35.0
+  bent_origin_torso_rotation: 18.0
+  low_origin_hip_ankle_height: 0.25
+  low_origin_minimum_hip_drop: 0.14
+  low_origin_minimum_shoulder_drop: 0.3
+  low_origin_minimum_hip_velocity: 0.35
+  low_origin_minimum_shoulder_velocity: 0.8
   possible_torso_angle: 40.0
   ground_hip_ankle_height: 0.24
+  maximum_floor_distance: 0.2
   lying_persistence_seconds: 0.35
-  candidate_timeout_seconds: 1.8
+  candidate_timeout_seconds: 2.0
+  slow_enabled: true
+  slow_window_seconds: 2.5
+  slow_minimum_motion_seconds: 1.2
+  slow_minimum_hip_drop: 0.58
+  slow_minimum_shoulder_drop: 0.5
+  slow_minimum_hip_velocity: 0.18
+  slow_maximum_hip_velocity: 0.65
+  slow_minimum_torso_rotation: 35.0
+  slow_minimum_downward_fraction: 0.8
+  slow_jitter_tolerance: 0.015
+  slow_lying_persistence_seconds: 0.6
+  controlled_lowering_enabled: true
+  controlled_origin_knee_angle: 155.0
+  controlled_knee_angle: 130.0
+  controlled_minimum_hip_drop: 0.18
+  controlled_confirmation_seconds: 0.12
+  controlled_window_seconds: 1.2
+  controlled_hold_seconds: 2.5
   possible_threshold: 0.55
   confirmed_threshold: 0.8
   normal_probability: 0.03
   possible_probability: 0.65
   fall_probability: 0.92
+  possible_confirmation_seconds: 0.08
+  fall_confirmation_seconds: 0.2
+  # Deprecated counts are translated to seconds at a fixed 15 Hz reference.
   confirmation_frames: 3
   recovery_seconds: 3.0
   event_cooldown_seconds: 10.0
@@ -84,6 +133,10 @@ fall:
   - normal
   - fall
   output_kind: logits
+  normalization: window_root_v1
+  minimum_scale_quality: 0.6
+  min_visible_fraction: 0.35
+  min_current_pose_fraction: 0.5
   min_history_seconds: 1.6
   minimum_confident_joints_per_pair: 1
 state:
@@ -96,6 +149,10 @@ state:
   - sitting
   - kneeling
   missing_unknown_seconds: 0.5
+  rearm_seconds: 1.0
+  rearm_postures:
+  - standing
+  - sitting
   posture_hold_seconds: 0.25
 runtime:
   provider: auto
@@ -105,9 +162,13 @@ runtime:
 visualization:
   debug: false
   joint_confidence_threshold: 0.3
-  max_overlay_age_seconds: 0.75
+  max_overlay_age_seconds: 0.25
+  max_overlay_frame_lag: 8
   window_name: Local Posture and Fall Detection
 events:
   path: outputs/events.jsonl
+  episode_retention_seconds: 60.0
+  episode_match_distance: 0.8
+  episode_min_iou: 0.05
 logging:
   level: INFO

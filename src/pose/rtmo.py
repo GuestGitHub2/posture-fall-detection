@@ -91,21 +91,24 @@ class RTMOEstimator(PoseEstimator):
             )
         valid = (
             np.isfinite(dets).all(axis=1)
-            & np.isfinite(keypoints).all(axis=(1, 2))
             & (dets[:, 4] >= self.score_threshold)
+            & (dets[:, 2] > dets[:, 0])
+            & (dets[:, 3] > dets[:, 1])
         )
         indices = np.flatnonzero(valid)
         boxes = dets[indices, :4].copy() / ratio
         height, width = image_size
-        boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], 0, width)
-        boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], 0, height)
         scores = dets[indices, 4]
         poses: list[Pose] = []
         for index in nms(boxes, scores, self.nms_threshold)[: self.max_people]:
-            box = boxes[index]
+            box = boxes[index].copy()
+            box[[0, 2]] = np.clip(box[[0, 2]], 0, width)
+            box[[1, 3]] = np.clip(box[[1, 3]], 0, height)
             if box[2] <= box[0] or box[3] <= box[1]:
                 continue
             joints = keypoints[indices[index]].copy()
+            invalid = ~np.isfinite(joints).all(axis=1)
+            joints[invalid] = 0
             joints[:, :2] /= ratio
             # Do not clip joint coordinates: partial-frame geometry must retain its
             # structure, but off-frame joints have zero confidence.

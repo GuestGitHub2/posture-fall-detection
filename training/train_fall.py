@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.fall.normalization import FALL_NORMALIZATION
 from training.dataset import fall_windows, grouped_split, load_records
 
 
@@ -17,7 +18,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("models/fall_temporal.pt"))
     parser.add_argument("--export", type=Path)
     parser.add_argument("--samples", type=int, default=48)
-    parser.add_argument("--history-seconds", type=float, default=2.0)
+    parser.add_argument("--history-seconds", type=float, default=2.5)
+    parser.add_argument("--max-gap-seconds", type=float, default=0.5)
+    parser.add_argument("--joint-confidence", type=float, default=0.4)
+    parser.add_argument("--minimum-scale-quality", type=float, default=0.6)
     parser.add_argument("--stride-seconds", type=float, default=0.5)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -32,10 +36,22 @@ def main() -> int:
             load_records(args.data), args.validation_fraction, args.seed
         )
         data, labels, _ = fall_windows(
-            train_records, args.samples, args.history_seconds, args.stride_seconds
+            train_records,
+            args.samples,
+            args.history_seconds,
+            args.stride_seconds,
+            args.max_gap_seconds,
+            args.joint_confidence,
+            args.minimum_scale_quality,
         )
         validation_data, validation_labels, _ = fall_windows(
-            validation_records, args.samples, args.history_seconds, args.stride_seconds
+            validation_records,
+            args.samples,
+            args.history_seconds,
+            args.stride_seconds,
+            args.max_gap_seconds,
+            args.joint_confidence,
+            args.minimum_scale_quality,
         )
         metadata = {
             "kind": "fall",
@@ -44,7 +60,12 @@ def main() -> int:
             "samples": args.samples,
             "history_seconds": args.history_seconds,
             "layout": "NCTVM",
-            "normalization": "hip_center_torso_plus_leg_length",
+            "normalization": FALL_NORMALIZATION,
+            "origin": "first_reliable_hip_center",
+            "scale": "median_reliable_torso_plus_leg_length",
+            "minimum_joint_confidence": args.joint_confidence,
+            "minimum_scale_quality": args.minimum_scale_quality,
+            "max_gap_seconds": args.max_gap_seconds,
             "train_sequences": sorted({r.sequence_id for r in train_records}),
             "validation_sequences": sorted({r.sequence_id for r in validation_records}),
         }

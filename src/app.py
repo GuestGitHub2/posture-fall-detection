@@ -5,6 +5,7 @@ import logging
 import math
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -54,7 +55,8 @@ class InferenceWorker:
                         break
                     continue
                 started = time.monotonic()
-                self.result = self.pipeline.process(packet.image, packet.timestamp)
+                result = self.pipeline.process(packet.image, packet.timestamp)
+                self.result = replace(result, frame_index=packet.index)
                 self.rate.tick()
                 last_index = packet.index
                 next_inference = started + self.interval
@@ -91,7 +93,9 @@ class Display:
         stats["processing_fps"] = self.rate.value
         if self.headless and self.output is None:
             return ""
-        image = self.renderer.render(packet.image, result, stats, packet.timestamp, self.paused)
+        image = self.renderer.render(
+            packet.image, result, stats, packet.timestamp, self.paused, frame_index=packet.index
+        )
         self.last_image = image
         if self.output:
             if self.writer is None:
@@ -159,6 +163,7 @@ def run_camera(args: argparse.Namespace, config: dict[str, Any], pipeline: Pipel
                 "pose_fps": worker.rate.value,
                 "provider": pipeline.provider,
                 "age_ms": (time.monotonic() - result.timestamp) * 1000 if result else 0,
+                "live": True,
             }
             key = display.show(packet, result, stats)
             if display.paused:
@@ -201,6 +206,8 @@ def run_video(args: argparse.Namespace, config: dict[str, Any], pipeline: Pipeli
                 break
             if packet.timestamp + 1e-6 >= next_pose:
                 last_result = pipeline.process(packet.image, packet.timestamp)
+                if isinstance(last_result, PipelineResult):
+                    last_result = replace(last_result, frame_index=packet.index)
                 pose_rate.tick(packet.timestamp)
                 interval = 1 / config["pose"]["inference_fps"]
                 next_pose = advance_deadline(next_pose, packet.timestamp, interval)

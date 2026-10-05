@@ -48,9 +48,15 @@ Each JSONL record has:
 
 The abbreviated `keypoints` above must contain **all 17 COCO joints** in a real
 record, each `[x_pixels,y_pixels,confidence]`. Bboxes are also saved by extraction
-and used to match inference normalization when too few limbs are visible.
-The loader requires finite coordinates and confidence in `[0,1]`. Training calls
-the same hip-centered torso-plus-leg-length normalization as inference.
+and used for confidence-aware scale measurements. Extraction uses the same
+monotonic media timestamps as video inference. Records also include
+`history_epoch`, association confidence and scale source/quality. Ambiguous
+matches are omitted; epoch changes prevent training windows from bridging an
+uncertain identity. Older records without epochs default to zero and should be
+audited for ID swaps before reuse.
+The loader requires finite coordinates and confidence in `[0,1]`. Posture
+training remains per-frame hip centered. Fall windows use `window_root_v1`,
+exactly as the ONNX adapter does.
 
 For posture, annotate standing, sitting, bending, lying, squatting, kneeling or
 unknown. For fall training, annotate normal or fall, with fall labeling beginning
@@ -71,9 +77,10 @@ split cannot manufacture missing minority classes.
 Implemented augmentations: COCO-aware horizontal flipping, normalized coordinate
 noise, joint dropout, confidence attenuation, small scale variation, temporal
 speed variation/cropping while keeping the causal endpoint. Missing joints are
-never revived. Image translation disappears under hip centering; exercise camera
-translation/framing and perspective in collected videos rather than adding
-artificial hip offsets to centered training inputs.
+never revived. A constant image translation disappears under normalization;
+time-varying root translation is retained in fall windows. Exercise camera
+framing and perspective in collected videos. Do not recenter each fall frame
+independently during augmentation, as that would erase descent again.
 
 ## Train/export posture
 
@@ -106,7 +113,7 @@ until the trained model and class mapping are supplied.
 ## Train/export fall
 
 ```sh
-python training/train_fall.py --data datasets/falls --samples 48 --history-seconds 2 --stride-seconds .5 --epochs 50 --output models/fall_temporal.pt --export models/fall_temporal.onnx
+python training/train_fall.py --data datasets/falls --samples 48 --history-seconds 2.5 --stride-seconds .5 --joint-confidence .4 --max-gap-seconds .5 --epochs 50 --output models/fall_temporal.pt --export models/fall_temporal.onnx
 ```
 
 This trainer is a compact graph-temporal baseline with normalized COCO adjacency
@@ -121,16 +128,29 @@ The contract for it and compatible ST-GCN++ exports is:
 - float32 input `skeleton`, `[N,C,T,V,M] = [1,3,48,17,1]` at deployment;
 - channel order normalized x, normalized y, joint confidence;
 - COCO-17 order from `src/pose/pose_types.py`;
-- 48 uniform causal samples over the preceding 2 seconds;
+- 48 uniform causal samples over the preceding 2.5 seconds by default;
 - output `logits`, `[1,2]`, class order normal, fall;
 - missing/long-gap joints zero confidence, short gaps interpolated;
 - one tracked person's history per invocation.
 
-Hip centering removes global body translation from this learned model's input;
-motion is represented through relative limb/torso changes. The heuristic also
-uses observed image-space hip descent normalized by body scale. Validate whether
-your trained model needs extra motion features or a fusion strategy before
-replacing the heuristic in difficult scenarios.
+`window_root_v1` chooses the first confident hip/root center within each window
+and the median reliable torso-plus-leg-length measurement across that window.
+Every frame uses this **same origin and scale**: `(pixel_xy - origin) / scale`.
+The root's y trajectory therefore retains descent. Confidence is a third channel;
+unobserved joints and padding have zero confidence. Short joint gaps interpolate
+only within the configured maximum gap; no extrapolation is used. Identity-epoch
+changes and long processing gaps split windows. Windows without a reliable root
+and body scale are excluded from training and cannot trigger model inference.
+
+The checkpoint and ONNX sidecar record `normalization: window_root_v1`, origin,
+scale policy, class order, samples, history duration, joint confidence threshold,
+minimum scale quality and interpolation gap. Keep those preprocessing values
+identical in deployment. The ONNX adapter checks provided metadata, and the
+checkpoint evaluator rejects old per-frame-centered fall checkpoints. Old fall
+weights must be retrained; renaming their normalization metadata is invalid.
+Externally exported weights without a sidecar must be independently verified
+against this exact contract. No pretrained or production fall weights were
+trained or fabricated for the hardening work.
 
 Create a learned profile:
 
@@ -139,8 +159,12 @@ fall:
   detector: stgcn
   model_path: models/fall_temporal.onnx
   sample_count: 48
-  history_seconds: 2.0
-  min_history_seconds: 1.6
+  history_seconds: 2.5
+  min_history_seconds: 2.0
+  normalization: window_root_v1
+  minimum_joint_confidence: 0.4
+  minimum_scale_quality: 0.6
+  max_gap_seconds: 0.5
   classes: [normal, fall]
   output_kind: logits
   min_visible_fraction: 0.35
@@ -191,7 +215,11 @@ python training/evaluate.py --mode fall --predictions datasets/heldout_predictio
 Prediction records include `sequence_id`, `track_id`, `timestamp`, ground-truth
 `label` (normal/fall), `prediction` (normal/fall) and optional `fall_onset`.
 A rising fall prediction is one alarm; sustained positives do not create repeated
-alarms, and `--cooldown-seconds` controls rearming. Latency is first true alarm
+alarms. `--cooldown-seconds` is the evaluator's legacy prediction-stream protocol,
+not the application's recovery/rearming semantics. For actual production
+evaluation, retain the event `episode_id` and its source timestamp and count
+emitted episodes directly; use `--cooldown-seconds 0` for streams whose rising
+edges already represent emitted episode decisions. Latency is first true alarm
 minus annotated onset, only when both exist. Missing onset or zero normal
 exposure gives null, not a fabricated zero. False alarms/hour requires continuous
 annotated normal recordings; intervals exceeding `--max-gap-seconds` do not

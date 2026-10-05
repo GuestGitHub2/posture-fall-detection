@@ -34,6 +34,8 @@ def extract_features(pose: Pose, threshold: float = 0.3) -> dict[str, float]:
         "body_scale": float(pose.body_scale),
         "visible_joints": float(np.sum(pose.keypoints[:, 2] >= threshold)),
         "joint_confidence": float(pose.keypoints[[5, 6, 11, 12, 13, 14, 15, 16], 2].mean()),
+        "pose_quality": float(pose.keypoints[[5, 6, 11, 12, 13, 14, 15, 16], 2].mean()),
+        "scale_quality": pose.scale_quality,
     }
     if hips is not None:
         features.update(hip_x=float(hips[0]), hip_y=float(hips[1]))
@@ -61,4 +63,5 @@ def extract_features(pose: Pose, threshold: float = 0.3) -> dict[str, float]:
         features["hip_knee_height"] = float((knees[1] - hips[1]) / pose.body_scale)
     if hips is not None and ankles is not None:
         features["hip_ankle_height"] = float((ankles[1] - hips[1]) / pose.body_scale)
+        features["ankle_y"] = float(ankles[1])
     return features

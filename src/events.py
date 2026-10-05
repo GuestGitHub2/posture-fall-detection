@@ -29,6 +29,8 @@ class EventBus:
         confidence: float,
         posture: str,
         source_timestamp: float,
+        *,
+        episode_id: int | None = None,
     ) -> dict[str, Any]:
         event = {
             "type": event_type,
@@ -38,6 +40,8 @@ class EventBus:
             "confidence": float(confidence),
             "posture": posture,
         }
+        if episode_id is not None:
+            event["episode_id"] = episode_id
         LOGGER.warning("EVENT %s", json.dumps(event))
         if self.path:
             try:
